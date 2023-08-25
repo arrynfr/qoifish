@@ -1,4 +1,6 @@
 use std::fs;
+use std::fs::File;
+use std::io::Read;
 
 const RGB: u8 = 3;
 const RGBA: u8 = 4;
@@ -14,9 +16,9 @@ const VAL_BITMASK: u8 = !OP_BITMASK;
 const QOI_DIFF: std::ops::Range<u8> = 0..4;
 const MAX_PIXELS_PER_RUN: u8 = 62;
 
-const WIDTH: u32 = 10;
-const HEIGHT: u32 = 10;
-const IMAGE: [u8; 10*10*4] = [255u8; 10*10*4];
+const WIDTH: u32 = 128;
+const HEIGHT: u32 = 128;
+//const IMAGE: [u8; 10*10*4] = [253u8; 10*10*4];
 
 fn qoi_calculate_index(r: u8, g: u8, b: u8, a: u8) -> usize {
 	((r as u16 * 3 + 
@@ -25,19 +27,12 @@ fn qoi_calculate_index(r: u8, g: u8, b: u8, a: u8) -> usize {
 	a as u16 * 11)  % 64) as usize
 }
 
-fn distance(a: u8, b: u8) -> u8 {
-    let forward_distance = b.wrapping_sub(a);
-    let backward_distance = a.wrapping_sub(b);
-
-    // Berücksichtigt den Bias von 2
-    if forward_distance <= 2 {
-        return forward_distance-2;
-    } else {
-        return backward_distance-2;
-    }
-}
-
 fn encode(width: u32, height: u32) {
+	let mut f = File::open("best_drawing.raw").unwrap();
+	let metadata = fs::metadata("best_drawing.raw").unwrap();
+	let mut IMAGE = vec![0; metadata.len() as usize];
+	f.read(&mut IMAGE).unwrap();
+	
 	//Init image buffer
 	let mut encoded_image: Vec<u8> = Vec::new();
 	encoded_image.append(&mut MAGIC.to_vec());
@@ -65,11 +60,14 @@ fn encode(width: u32, height: u32) {
 	let mut qoi_run_pixels: u8 = 0;
 	let size = width*height;
 	for idx in 0..size {
-		let idx = (idx*4) as usize;
+		let idx = (idx*3) as usize;
 		let rn = IMAGE[idx];
 		let gn = IMAGE[idx+1];
 		let bn = IMAGE[idx+2];
-		let _an = IMAGE[idx+3];
+		/*let _an = IMAGE[idx+3];*/
+		/*let rn = buffer.get(idx).unwrap();
+		let gn = buffer.get(idx+1).unwrap();
+		let bn = buffer.get(idx+2).unwrap();*/
 		let an = 255u8;
 
 		let index_position = qoi_calculate_index(rn,gn,bn,an);
@@ -105,23 +103,18 @@ fn encode(width: u32, height: u32) {
 			previous_a[index_position] = an;
 
 			// check if we can diff encode
-			/*dr = rp.wrapping_add(rn);
-			dg = gp.wrapping_add(gn);
-			db = bp.wrapping_add(bn);*/
+			dr = rp.wrapping_sub(rn);
+			dr = (!dr+1).wrapping_add(2);
+			dg = gp.wrapping_sub(gn);
+			dg = (!dg+1).wrapping_add(2);
+			db = bp.wrapping_sub(bn);
+			db = (!db+1).wrapping_add(2);
 
-			let dr = distance(rp, rn);
-			let dg = distance(gp, gn);
-			let db = distance(bp, bn);
-			
-			println!("dr: {}, dg: {}, db: {}", dr, dg, db);
-
-			/*if 	QOI_DIFF.contains(&dr) &&
+			if 	QOI_DIFF.contains(&dr) &&
 				QOI_DIFF.contains(&dg) &&
 				QOI_DIFF.contains(&db) {
-				println!("Within range");
-			}*/
-				// can't diff encode
-			if an != ap {
+				encoded_image.push(QOI_OP_DIFF | dr << 4 | dg << 2 | db);
+			} else if an != ap {
 				encoded_image.append(&mut [QOI_OP_RGBA, rn, gn, bn, an].to_vec());
 			} else {
 				encoded_image.append(&mut [QOI_OP_RGB, rn, gn, bn].to_vec());
