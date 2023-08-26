@@ -15,3 +15,5 @@ Cargo.lock
 
 .DS_STORE
 *.qoi
+*.png
+*.raw
